@@ -75,3 +75,16 @@ A neural network or large time-series model would be excessive here:
 - This system needs to be easy to inspect, test, and extend.
 
 In a production restaurant group with years of POS data, this design could evolve into gradient boosted trees, Prophet-style time-series components, or hierarchical forecasting. The current version is deliberately practical and transparent.
+
+## Runtime Efficiency
+
+The production path is lightweight:
+
+- No external runtime libraries.
+- Historical CSVs are loaded once per `RestaurantForecaster` instance.
+- Forecasting only multiplies learned factors and applies a fixed hourly distribution.
+- Staffing is rule-based and linear in the number of service hours and roles.
+- Ingredient planning is linear in menu recipes and ingredient count.
+- Feedback learning updates existing coefficients online instead of retraining the full model.
+
+This keeps the system easy to run in Docker, easy to inspect in code review, and fast enough for operational planning.

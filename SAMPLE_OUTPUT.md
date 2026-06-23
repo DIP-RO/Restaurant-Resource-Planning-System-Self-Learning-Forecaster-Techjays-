@@ -50,6 +50,13 @@ docker build -t restaurant-forecaster .
 docker run --rm --entrypoint python restaurant-forecaster -m pytest -q
 ```
 
+Makefile equivalent:
+
+```bash
+make docker-build
+make docker-test
+```
+
 Local equivalent:
 
 ```bash

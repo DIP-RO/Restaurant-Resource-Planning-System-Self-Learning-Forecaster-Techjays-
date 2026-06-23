@@ -128,6 +128,7 @@ src/restaurant_forecaster/
   cli.py                     Command-line entry point
 
 main.py                      Simple root runner for reviewers
+Makefile                     Short local and Docker commands for reviewers
 
 docs/
   MODEL_CARD.md              Model choice, preprocessing, and learning details
@@ -146,6 +147,14 @@ requirements-dev.txt         Test/development requirements
 - `inventory.py`: converts predicted covers and menu mix into ingredient order quantities.
 - `feedback.py`: contains bounded update functions for online learning.
 - `cli.py`: provides the runnable interface for forecast and correction commands.
+
+### Efficiency Choices
+
+- Runtime has no external dependencies, so startup is fast and Docker builds stay small.
+- CSV files are loaded once when `RestaurantForecaster` is created.
+- Forecasting is O(H + R + I), where H is service hours, R is recipe rows, and I is ingredients.
+- Feedback learning updates only the relevant coefficients and hourly distribution; it does not retrain from scratch.
+- The model state is persisted as compact JSON so future corrections are cheap to load.
 
 ## Staffing Logic
 
@@ -223,6 +232,18 @@ Run model evaluation inside Docker:
 
 ```bash
 docker run --rm --entrypoint python restaurant-forecaster scripts/evaluate_model.py
+```
+
+### Makefile Shortcuts
+
+```bash
+make forecast
+make correct
+make test
+make evaluate
+make docker-build
+make docker-test
+make docker-evaluate
 ```
 
 ### Local Python

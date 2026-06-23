@@ -8,7 +8,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from .feedback import clamp, update_multiplier
+from .feedback import apply_bounded_multiplier, clamp
 from .inventory import plan_ingredient_orders
 from .staffing import calculate_staffing, load_staff_rules
 
@@ -294,10 +294,7 @@ class RestaurantForecaster:
 
     def _nudge_factor(self, group: str, key: str, multiplier_delta: float) -> None:
         factors = self.state[group]
-        old_value = float(factors.get(key, 1.0))
-        predicted = 1.0
-        actual = 1.0 + ((multiplier_delta - 1.0) / max(float(self.state["learning_rate"]), 0.001))
-        factors[key] = update_multiplier(old_value, actual, predicted, float(self.state["learning_rate"]))
+        factors[key] = apply_bounded_multiplier(float(factors.get(key, 1.0)), multiplier_delta)
 
     def _normalize_hourly_shape(self) -> None:
         shape = self.state["hourly_shape"]
