@@ -34,6 +34,24 @@ REQUIRED_INGREDIENT_COLUMNS = {
     "supplier_lead_time_days",
     "min_order_qty",
 }
+WEATHER_ALIASES = {
+    "sunny": "clear",
+    "rainy": "rain",
+    "raining": "rain",
+    "thunderstorm": "storm",
+    "thunderstorms": "storm",
+    "heatwave": "hot",
+    "snow": "cold",
+    "snowy": "cold",
+}
+EVENT_ALIASES = {
+    "no_event": "none",
+    "local_event": "festival",
+    "music_event": "concert",
+    "game": "sports",
+    "sports_game": "sports",
+}
+UNSEEN_FACTOR = 1.0
 
 
 @dataclass(frozen=True)
@@ -78,8 +96,7 @@ class RestaurantForecaster:
         holiday: bool = False,
         on_hand: dict[str, float] | None = None,
     ) -> dict[str, Any]:
-        context = DayContext(self._parse_date(target_date), weather, event, holiday)
-        self._validate_context(context)
+        context, warnings = self._prepare_context(target_date, weather, event, holiday)
         clean_on_hand = self._validate_stock(on_hand or {})
         hourly_covers = self._forecast_covers(context)
         total_covers = sum(hourly_covers.values())
@@ -91,8 +108,11 @@ class RestaurantForecaster:
                 "weekday": context.weekday,
                 "weather": weather,
                 "event": event,
+                "normalized_weather": context.weather,
+                "normalized_event": context.event,
                 "holiday": holiday,
             },
+            "warnings": warnings,
             "covers_by_hour": hourly_covers,
             "total_covers": round(total_covers, 1),
             "staffing_by_hour": staffing,
@@ -109,8 +129,7 @@ class RestaurantForecaster:
         reason: str = "",
     ) -> dict[str, Any]:
         """Update coefficients from manager feedback and persist the new model."""
-        context = DayContext(self._parse_date(target_date), weather, event, holiday)
-        self._validate_context(context)
+        context, warnings = self._prepare_context(target_date, weather, event, holiday, learn_unseen=True)
         predicted = self._forecast_covers(context)
         actual = self._validate_actual_covers(actual_covers_by_hour)
         predicted_total = sum(predicted.values())
@@ -119,8 +138,8 @@ class RestaurantForecaster:
         learning_rate = float(self.state["learning_rate"])
         multiplier_delta = 1 + ((ratio - 1) * learning_rate)
 
-        self._nudge_factor("weather_factors", weather, multiplier_delta)
-        self._nudge_factor("event_factors", event, multiplier_delta)
+        self._nudge_factor("weather_factors", context.weather, multiplier_delta)
+        self._nudge_factor("event_factors", context.event, multiplier_delta)
         self._nudge_factor("weekday_factors", context.weekday, multiplier_delta)
         if holiday:
             self._nudge_factor("event_factors", "holiday", multiplier_delta)
@@ -142,6 +161,8 @@ class RestaurantForecaster:
                 "reason": reason,
                 "weather": weather,
                 "event": event,
+                "normalized_weather": context.weather,
+                "normalized_event": context.event,
                 "holiday": holiday,
                 "predicted_total": round(predicted_total, 2),
                 "actual_total": round(actual_total, 2),
@@ -153,8 +174,9 @@ class RestaurantForecaster:
             "predicted_total": round(predicted_total, 1),
             "actual_total": round(actual_total, 1),
             "adjustment_ratio": round(ratio, 3),
-            "updated_weather_factor": round(self.state["weather_factors"].get(weather, 1.0), 3),
-            "updated_event_factor": round(self.state["event_factors"].get(event, 1.0), 3),
+            "updated_weather_factor": round(self.state["weather_factors"].get(context.weather, UNSEEN_FACTOR), 3),
+            "updated_event_factor": round(self.state["event_factors"].get(context.event, UNSEEN_FACTOR), 3),
+            "warnings": warnings,
             "message": "Model coefficients updated from manager correction.",
         }
 
@@ -306,15 +328,47 @@ class RestaurantForecaster:
         if missing_hours:
             raise ValueError(f"model state hourly_shape is missing hours: {', '.join(sorted(missing_hours))}")
 
-    def _validate_context(self, context: DayContext) -> None:
-        self._validate_factor("weather", context.weather, self.state["weather_factors"])
-        self._validate_factor("event", context.event, self.state["event_factors"])
+    def _prepare_context(
+        self,
+        target_date: str | date,
+        weather: str,
+        event: str,
+        holiday: bool,
+        learn_unseen: bool = False,
+    ) -> tuple[DayContext, list[str]]:
+        normalized_weather, weather_warning = self._normalize_factor(
+            "weather",
+            weather,
+            self.state["weather_factors"],
+            WEATHER_ALIASES,
+            learn_unseen,
+        )
+        normalized_event, event_warning = self._normalize_factor(
+            "event",
+            event,
+            self.state["event_factors"],
+            EVENT_ALIASES,
+            learn_unseen,
+        )
+        warnings = [warning for warning in (weather_warning, event_warning) if warning]
+        return DayContext(self._parse_date(target_date), normalized_weather, normalized_event, holiday), warnings
 
     @staticmethod
-    def _validate_factor(name: str, value: str, factors: dict[str, float]) -> None:
-        if value not in factors:
-            allowed = ", ".join(sorted(factors))
-            raise ValueError(f"unknown {name} '{value}'. Allowed values: {allowed}")
+    def _normalize_factor(
+        name: str,
+        value: str,
+        factors: dict[str, float],
+        aliases: dict[str, str],
+        learn_unseen: bool,
+    ) -> tuple[str, str | None]:
+        normalized = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+        normalized = aliases.get(normalized, normalized)
+        if normalized in factors:
+            return normalized, None
+        if learn_unseen:
+            factors[normalized] = UNSEEN_FACTOR
+            return normalized, f"unseen {name} '{value}' initialized with neutral factor {UNSEEN_FACTOR}"
+        return normalized, f"unseen {name} '{value}' used neutral factor {UNSEEN_FACTOR}"
 
     @staticmethod
     def _validate_actual_covers(actual_covers_by_hour: dict[int | str, float]) -> dict[int, float]:

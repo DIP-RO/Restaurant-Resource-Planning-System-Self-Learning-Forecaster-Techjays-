@@ -92,8 +92,8 @@ Example evaluation output:
 Docker test output:
 
 ```text
-................                                                         [100%]
-16 passed in 0.12s
+.................                                                        [100%]
+17 passed in 0.12s
 ```
 
 Detailed local test output:
@@ -106,26 +106,27 @@ rootdir: /Users/dipro/Techjys
 configfile: pyproject.toml
 plugins: asyncio-1.2.0, langsmith-0.4.28, anyio-4.10.0
 asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collecting ... collected 16 items
+collecting ... collected 17 items
 
-tests/test_forecaster.py::test_forecast_includes_covers_staffing_and_ingredients PASSED [  6%]
-tests/test_forecaster.py::test_correction_updates_future_weather_factor PASSED [ 12%]
-tests/test_forecaster.py::test_weather_and_event_context_change_cover_forecast PASSED [ 18%]
-tests/test_forecaster.py::test_high_on_hand_stock_can_eliminate_ingredient_orders PASSED [ 25%]
-tests/test_forecaster.py::test_correction_persists_and_reloads_model_state PASSED [ 31%]
-tests/test_forecaster.py::test_invalid_correction_hour_is_rejected PASSED [ 37%]
-tests/test_forecaster.py::test_negative_actual_covers_are_rejected PASSED [ 43%]
-tests/test_forecaster.py::test_negative_on_hand_stock_is_rejected PASSED [ 50%]
-tests/test_forecaster.py::test_unknown_weather_is_rejected PASSED        [ 56%]
-tests/test_forecaster.py::test_unknown_event_is_rejected PASSED          [ 62%]
-tests/test_forecaster.py::test_unknown_on_hand_ingredient_is_rejected PASSED [ 68%]
-tests/test_forecaster.py::test_empty_history_data_is_rejected PASSED     [ 75%]
-tests/test_forecaster.py::test_history_missing_required_columns_is_rejected PASSED [ 81%]
-tests/test_forecaster.py::test_corrupted_model_state_is_rejected PASSED  [ 87%]
-tests/test_forecaster.py::test_incomplete_model_state_is_rejected PASSED [ 93%]
+tests/test_forecaster.py::test_forecast_includes_covers_staffing_and_ingredients PASSED [  5%]
+tests/test_forecaster.py::test_correction_updates_future_weather_factor PASSED [ 11%]
+tests/test_forecaster.py::test_weather_and_event_context_change_cover_forecast PASSED [ 17%]
+tests/test_forecaster.py::test_high_on_hand_stock_can_eliminate_ingredient_orders PASSED [ 23%]
+tests/test_forecaster.py::test_correction_persists_and_reloads_model_state PASSED [ 29%]
+tests/test_forecaster.py::test_invalid_correction_hour_is_rejected PASSED [ 35%]
+tests/test_forecaster.py::test_negative_actual_covers_are_rejected PASSED [ 41%]
+tests/test_forecaster.py::test_negative_on_hand_stock_is_rejected PASSED [ 47%]
+tests/test_forecaster.py::test_weather_alias_is_normalized PASSED        [ 52%]
+tests/test_forecaster.py::test_unseen_event_forecasts_with_neutral_factor_and_warning PASSED [ 58%]
+tests/test_forecaster.py::test_unseen_event_correction_creates_learned_factor PASSED [ 64%]
+tests/test_forecaster.py::test_unknown_on_hand_ingredient_is_rejected PASSED [ 70%]
+tests/test_forecaster.py::test_empty_history_data_is_rejected PASSED     [ 76%]
+tests/test_forecaster.py::test_history_missing_required_columns_is_rejected PASSED [ 82%]
+tests/test_forecaster.py::test_corrupted_model_state_is_rejected PASSED  [ 88%]
+tests/test_forecaster.py::test_incomplete_model_state_is_rejected PASSED [ 94%]
 tests/test_forecaster.py::test_extreme_corrections_keep_coefficients_and_hourly_shape_bounded PASSED [100%]
 
-============================== 16 passed in 0.10s ==============================
+============================== 17 passed in 0.11s ==============================
 ```
 
 ## What The Tests Prove
@@ -136,7 +137,9 @@ tests/test_forecaster.py::test_extreme_corrections_keep_coefficients_and_hourly_
 - Feedback learning updates coefficients.
 - Model state can be saved and loaded.
 - Invalid manager feedback is rejected instead of corrupting the model.
-- Unknown weather and event labels are rejected instead of being silently treated as neutral.
+- Weather aliases are normalized.
+- Unseen event labels forecast with neutral factors and warnings.
+- Corrections for unseen labels create learned coefficients over time.
 - Unknown ingredient names in stock input are rejected.
 - Empty or malformed historical datasets are rejected with clear errors.
 - Corrupted or incomplete model state files are rejected.

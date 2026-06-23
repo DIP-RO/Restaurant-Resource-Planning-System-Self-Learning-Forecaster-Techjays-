@@ -106,6 +106,17 @@ If actual covers are lower than predicted on a rainy day, the rain coefficient d
 
 Updates are bounded so one unusual night cannot destroy the model.
 
+## Unseen Data Handling
+
+The system can forecast upcoming days even when a weather or event label was not present in the training CSV.
+
+- Common aliases are normalized, for example `rainy` becomes `rain`.
+- Truly unseen weather or event labels use a neutral `1.0` factor for the first forecast.
+- Forecast responses include a `warnings` list when an unseen label is handled with a neutral factor.
+- If a manager later submits a correction for that unseen label, the system initializes a coefficient for it and begins learning from feedback.
+
+Invalid operational data is still rejected. Unknown ingredient names, negative stock, invalid service hours, corrupted model state, and malformed CSV schemas should fail loudly rather than silently produce bad plans.
+
 ## Architecture
 
 ```text
@@ -313,7 +324,9 @@ The test suite checks:
 - Invalid service hours are rejected.
 - Negative actual covers are rejected.
 - Negative on-hand stock is rejected.
-- Unknown weather and event labels are rejected.
+- Weather aliases are normalized.
+- Unseen weather and event labels forecast with neutral factors and warnings.
+- Corrections for unseen labels create learned coefficients over time.
 - Unknown ingredient names in stock input are rejected.
 - Empty or malformed historical datasets are rejected.
 - Corrupted or incomplete model state files are rejected.

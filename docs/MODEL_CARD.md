@@ -65,6 +65,17 @@ new_factor = old_factor × multiplier_delta
 
 The update is bounded so a single unusual night cannot destroy the model. The hourly distribution is also nudged toward the actual hour-by-hour pattern.
 
+## Unseen Categories
+
+The model supports unseen weather and event labels at inference time.
+
+- Known aliases are normalized before prediction.
+- Unknown labels use a neutral `1.0` factor for the first forecast.
+- The response includes warnings so managers know the category was unseen.
+- If a correction is submitted for that new label, the system creates a coefficient and learns it online.
+
+This is safer than crashing on a genuinely new event, but still transparent enough to catch unusual inputs during review.
+
 ## Why Not Use Deep Learning?
 
 A neural network or large time-series model would be excessive here:
