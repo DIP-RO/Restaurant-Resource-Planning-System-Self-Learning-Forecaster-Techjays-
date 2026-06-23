@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import json
 import pytest
 
 from restaurant_forecaster import RestaurantForecaster
@@ -169,3 +170,93 @@ def test_unknown_event_is_rejected(tmp_path):
 
     with pytest.raises(ValueError, match="unknown event"):
         forecaster.apply_correction("2025-08-02", {10: 5}, event="parade")
+
+
+def test_unknown_on_hand_ingredient_is_rejected(tmp_path):
+    forecaster = build_forecaster(tmp_path)
+
+    with pytest.raises(ValueError, match="unknown ingredient"):
+        forecaster.forecast("2025-08-02", on_hand={"chikcen_kg": 3})
+
+
+def test_empty_history_data_is_rejected(tmp_path):
+    history = tmp_path / "empty_history.csv"
+    history.write_text("date,weekday,hour,weather,event,covers,top_dish,dish_orders\n")
+
+    with pytest.raises(ValueError, match="history data is empty"):
+        RestaurantForecaster(
+            history,
+            DATA / "menu_recipes.csv",
+            DATA / "ingredients.csv",
+            tmp_path / "model_state.json",
+            DATA / "staff_rules.csv",
+        )
+
+
+def test_history_missing_required_columns_is_rejected(tmp_path):
+    history = tmp_path / "bad_history.csv"
+    history.write_text("date,hour,covers\n2025-01-01,10,5\n")
+
+    with pytest.raises(ValueError, match="missing required columns"):
+        RestaurantForecaster(
+            history,
+            DATA / "menu_recipes.csv",
+            DATA / "ingredients.csv",
+            tmp_path / "model_state.json",
+            DATA / "staff_rules.csv",
+        )
+
+
+def test_corrupted_model_state_is_rejected(tmp_path):
+    model_path = tmp_path / "model_state.json"
+    model_path.write_text("{not valid json")
+
+    with pytest.raises(ValueError, match="invalid model state JSON"):
+        RestaurantForecaster(
+            DATA / "sales_history.csv",
+            DATA / "menu_recipes.csv",
+            DATA / "ingredients.csv",
+            model_path,
+            DATA / "staff_rules.csv",
+        )
+
+
+def test_incomplete_model_state_is_rejected(tmp_path):
+    model_path = tmp_path / "model_state.json"
+    model_path.write_text(json.dumps({"base_daily_covers": 100}))
+
+    with pytest.raises(ValueError, match="model state is missing required keys"):
+        RestaurantForecaster(
+            DATA / "sales_history.csv",
+            DATA / "menu_recipes.csv",
+            DATA / "ingredients.csv",
+            model_path,
+            DATA / "staff_rules.csv",
+        )
+
+
+def test_extreme_corrections_keep_coefficients_and_hourly_shape_bounded(tmp_path):
+    forecaster = build_forecaster(tmp_path)
+
+    forecaster.apply_correction(
+        "2025-08-02",
+        {hour: 0 for hour in range(10, 24)},
+        weather="rain",
+        event="none",
+        reason="full closure",
+    )
+    forecaster.apply_correction(
+        "2025-08-03",
+        {hour: 1000 for hour in range(10, 24)},
+        weather="rain",
+        event="none",
+        reason="unexpected festival spillover",
+    )
+
+    rain_factor = forecaster.state["weather_factors"]["rain"]
+    none_event_factor = forecaster.state["event_factors"]["none"]
+    shape_total = sum(float(value) for value in forecaster.state["hourly_shape"].values())
+
+    assert 0.45 <= rain_factor <= 1.9
+    assert 0.45 <= none_event_factor <= 1.9
+    assert shape_total == pytest.approx(1.0, abs=0.001)

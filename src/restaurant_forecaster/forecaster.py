@@ -4,6 +4,7 @@ import csv
 import json
 from dataclasses import dataclass
 from datetime import date, datetime
+from json import JSONDecodeError
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -14,6 +15,25 @@ from .staffing import calculate_staffing, load_staff_rules
 
 
 SERVICE_HOURS = list(range(10, 24))
+REQUIRED_HISTORY_COLUMNS = {
+    "date",
+    "weekday",
+    "hour",
+    "weather",
+    "event",
+    "covers",
+    "top_dish",
+    "dish_orders",
+}
+REQUIRED_RECIPE_COLUMNS = {"dish", "ingredient"}
+REQUIRED_INGREDIENT_COLUMNS = {
+    "ingredient",
+    "current_stock",
+    "unit",
+    "shelf_life_days",
+    "supplier_lead_time_days",
+    "min_order_qty",
+}
 
 
 @dataclass(frozen=True)
@@ -48,6 +68,7 @@ class RestaurantForecaster:
         self.ingredients = self._load_ingredients()
         self.staff_rules = load_staff_rules(staff_rules_path)
         self.state = self._load_or_train_state()
+        self._validate_state(self.state)
 
     def forecast(
         self,
@@ -173,13 +194,17 @@ class RestaurantForecaster:
 
     def _load_or_train_state(self) -> dict[str, Any]:
         if self.model_path.exists():
-            return json.loads(self.model_path.read_text())
+            try:
+                return json.loads(self.model_path.read_text())
+            except JSONDecodeError as exc:
+                raise ValueError(f"invalid model state JSON at {self.model_path}") from exc
         state = self._train_initial_state()
         self.state = state
         self.save()
         return state
 
     def _train_initial_state(self) -> dict[str, Any]:
+        self._validate_rows("history", self.history, REQUIRED_HISTORY_COLUMNS)
         daily_totals: dict[str, float] = {}
         weekday_totals: dict[str, list[float]] = {}
         weather_totals: dict[str, list[float]] = {}
@@ -190,11 +215,17 @@ class RestaurantForecaster:
 
         for row in self.history:
             day = row["date"]
+            hour = int(row["hour"])
+            if hour not in SERVICE_HOURS:
+                raise ValueError(f"history hour {hour} is outside service hours {SERVICE_HOURS[0]}-{SERVICE_HOURS[-1]}")
             covers = float(row["covers"])
+            dish_orders = float(row["dish_orders"])
+            if covers < 0 or dish_orders < 0:
+                raise ValueError("history covers and dish_orders cannot be negative")
             daily_totals[day] = daily_totals.get(day, 0.0) + covers
-            hourly_totals[int(row["hour"])] += covers
-            menu_totals[row["top_dish"]] = menu_totals.get(row["top_dish"], 0.0) + float(row["dish_orders"])
-            total_orders += float(row["dish_orders"])
+            hourly_totals[hour] += covers
+            menu_totals[row["top_dish"]] = menu_totals.get(row["top_dish"], 0.0) + dish_orders
+            total_orders += dish_orders
 
         day_meta = {row["date"]: row for row in self.history}
         for day, covers in daily_totals.items():
@@ -222,14 +253,58 @@ class RestaurantForecaster:
         }
 
     def _load_recipes(self) -> dict[str, dict[str, float]]:
+        rows = self._read_csv(self.recipes_path)
+        self._validate_rows("recipes", rows, REQUIRED_RECIPE_COLUMNS)
         recipes: dict[str, dict[str, float]] = {}
-        for row in self._read_csv(self.recipes_path):
+        for row in rows:
             quantity = row.get("quantity_per_dish", row.get("quantity_per_cover", "0"))
-            recipes.setdefault(row["dish"], {})[row["ingredient"]] = float(quantity)
+            quantity_value = float(quantity)
+            if quantity_value < 0:
+                raise ValueError("recipe quantities cannot be negative")
+            recipes.setdefault(row["dish"], {})[row["ingredient"]] = quantity_value
         return recipes
 
     def _load_ingredients(self) -> dict[str, dict[str, str]]:
-        return {row["ingredient"]: row for row in self._read_csv(self.ingredients_path)}
+        rows = self._read_csv(self.ingredients_path)
+        self._validate_rows("ingredients", rows, REQUIRED_INGREDIENT_COLUMNS)
+        ingredients = {row["ingredient"]: row for row in rows}
+        for name, row in ingredients.items():
+            if float(row["current_stock"]) < 0:
+                raise ValueError(f"ingredient {name} has negative current_stock")
+            if int(row["shelf_life_days"]) <= 0:
+                raise ValueError(f"ingredient {name} must have positive shelf_life_days")
+            if int(row["supplier_lead_time_days"]) < 0:
+                raise ValueError(f"ingredient {name} cannot have negative supplier_lead_time_days")
+            if float(row["min_order_qty"]) < 0:
+                raise ValueError(f"ingredient {name} cannot have negative min_order_qty")
+        return ingredients
+
+    @staticmethod
+    def _validate_rows(name: str, rows: list[dict[str, str]], required_columns: set[str]) -> None:
+        if not rows:
+            raise ValueError(f"{name} data is empty")
+        missing = required_columns - set(rows[0])
+        if missing:
+            raise ValueError(f"{name} data is missing required columns: {', '.join(sorted(missing))}")
+
+    @staticmethod
+    def _validate_state(state: dict[str, Any]) -> None:
+        required_keys = {
+            "base_daily_covers",
+            "learning_rate",
+            "weekday_factors",
+            "weather_factors",
+            "event_factors",
+            "hourly_shape",
+            "menu_mix",
+            "corrections",
+        }
+        missing = required_keys - set(state)
+        if missing:
+            raise ValueError(f"model state is missing required keys: {', '.join(sorted(missing))}")
+        missing_hours = {str(hour) for hour in SERVICE_HOURS} - set(state["hourly_shape"])
+        if missing_hours:
+            raise ValueError(f"model state hourly_shape is missing hours: {', '.join(sorted(missing_hours))}")
 
     def _validate_context(self, context: DayContext) -> None:
         self._validate_factor("weather", context.weather, self.state["weather_factors"])
@@ -261,10 +336,11 @@ class RestaurantForecaster:
             actual[parsed_hour] = covers
         return actual
 
-    @staticmethod
-    def _validate_stock(on_hand: dict[str, float]) -> dict[str, float]:
+    def _validate_stock(self, on_hand: dict[str, float]) -> dict[str, float]:
         clean_stock: dict[str, float] = {}
         for ingredient, value in on_hand.items():
+            if ingredient not in self.ingredients:
+                raise ValueError(f"unknown ingredient '{ingredient}' in on-hand stock")
             try:
                 stock = float(value)
             except (TypeError, ValueError) as exc:

@@ -314,6 +314,10 @@ The test suite checks:
 - Negative actual covers are rejected.
 - Negative on-hand stock is rejected.
 - Unknown weather and event labels are rejected.
+- Unknown ingredient names in stock input are rejected.
+- Empty or malformed historical datasets are rejected.
+- Corrupted or incomplete model state files are rejected.
+- Extreme corrections keep coefficients bounded and hourly shape normalized.
 - Evaluation script reports MAE, RMSE, and MAPE for forecast error.
 
 Full test output is included in [SAMPLE_OUTPUT.md](SAMPLE_OUTPUT.md).
