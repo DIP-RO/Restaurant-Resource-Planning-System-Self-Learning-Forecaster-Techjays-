@@ -1,0 +1,2 @@
+# Runtime dependencies: none.
+# The application uses only the Python standard library.

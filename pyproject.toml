@@ -1,0 +1,11 @@
+[project]
+name = "restaurant-resource-forecaster"
+version = "1.0.0"
+description = "Self-learning restaurant resource planning forecaster"
+requires-python = ">=3.10"
+
+[project.scripts]
+restaurant-forecaster = "restaurant_forecaster.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

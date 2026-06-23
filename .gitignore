@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+restaurant_resource_forecaster.zip
+model_state.json
+.model_state.json

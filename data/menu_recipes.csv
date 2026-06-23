@@ -1,0 +1,17 @@
+dish,ingredient,quantity_per_dish,unit
+roast_chicken,chicken_kg,0.22,kg
+roast_chicken,potato_kg,0.18,kg
+roast_chicken,tomato_kg,0.04,kg
+beef_burger,beef_kg,0.18,kg
+beef_burger,bun_each,1.0,each
+beef_burger,lettuce_heads,0.05,heads
+beef_burger,tomato_kg,0.05,kg
+veggie_pasta,pasta_kg,0.16,kg
+veggie_pasta,cream_l,0.08,liter
+veggie_pasta,parmesan_kg,0.025,kg
+salmon_bowl,salmon_kg,0.19,kg
+salmon_bowl,rice_kg,0.14,kg
+salmon_bowl,lettuce_heads,0.04,heads
+caesar_salad,lettuce_heads,0.12,heads
+caesar_salad,chicken_kg,0.08,kg
+caesar_salad,parmesan_kg,0.02,kg

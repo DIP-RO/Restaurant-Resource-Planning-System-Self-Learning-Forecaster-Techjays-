@@ -1,0 +1,12 @@
+ingredient,current_stock,unit,shelf_life_days,supplier_lead_time_days,min_order_qty
+chicken_kg,5,kg,3,2,2
+beef_kg,4,kg,4,3,2
+salmon_kg,3,kg,2,2,1
+pasta_kg,8,kg,30,5,2
+rice_kg,10,kg,20,4,5
+lettuce_heads,10,heads,4,1,4
+tomato_kg,5,kg,5,1,2
+potato_kg,12,kg,14,3,5
+bun_each,40,each,5,2,24
+parmesan_kg,2,kg,21,4,1
+cream_l,4,liter,7,2,2

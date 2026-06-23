@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Python tests and model evaluation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: PYTHONPATH=src python -m pytest -q
+
+      - name: Run model evaluation
+        run: python scripts/evaluate_model.py
+
+  docker:
+    name: Docker build and smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t restaurant-forecaster .
+
+      - name: Smoke test forecast command
+        run: docker run --rm restaurant-forecaster forecast --date 2025-08-01 --weather rain --event concert
+
+      - name: Run tests in Docker
+        run: docker run --rm --entrypoint python restaurant-forecaster -m pytest -q
+
+      - name: Run model evaluation in Docker
+        run: docker run --rm --entrypoint python restaurant-forecaster scripts/evaluate_model.py

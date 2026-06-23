@@ -1,0 +1,8 @@
+role,covers_per_staff,minimum_staff,active_from,active_to
+server,18,1,10,23
+line_cook,22,1,10,23
+prep_cook,45,1,10,23
+host,55,1,10,23
+bartender,35,0,16,23
+dishwasher,40,1,10,23
+manager,999,1,10,23
