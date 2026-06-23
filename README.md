@@ -88,6 +88,23 @@ flowchart TD
     P --> Q["Persist model state for future forecasts"]
 ```
 
+## Quick Reviewer Commands
+
+```bash
+docker compose run --rm forecast
+docker compose run --rm forecast-unseen
+docker compose run --rm test
+docker compose run --rm evaluate
+```
+
+Local equivalents:
+
+```bash
+make forecast
+make test
+make evaluate
+```
+
 ## Why This Modeling Approach
 
 For this assignment, I used an explainable coefficient-based online learning forecaster.
@@ -436,7 +453,6 @@ The test suite checks:
 - Negative actual covers are rejected.
 - Negative on-hand stock is rejected.
 - Weather aliases are normalized.
-- Unseen weather and event labels forecast with learned fallback factors and warnings.
 - Corrections for unseen labels create learned coefficients over time.
 - Legacy model state files are migrated to include learned fallback factors.
 - Unknown ingredient names in stock input are rejected.
