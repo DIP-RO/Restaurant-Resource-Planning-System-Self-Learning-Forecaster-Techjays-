@@ -70,11 +70,13 @@ The update is bounded so a single unusual night cannot destroy the model. The ho
 The model supports unseen weather and event labels at inference time.
 
 - Known aliases are normalized before prediction.
-- Unknown labels use a neutral `1.0` factor for the first forecast.
-- The response includes warnings so managers know the category was unseen.
-- If a correction is submitted for that new label, the system creates a coefficient and learns it online.
+- Unknown labels use a learned fallback factor derived from the training distribution, not a static neutral value.
+- Weather fallback is calculated from the frequency-weighted average of observed weather factors.
+- Event fallback is calculated from observed real-event factors; if the restaurant history has no real events, the baseline event distribution is used.
+- The response includes warnings so managers know the category was unseen and can review the decision.
+- If a correction is submitted for that new label, the system creates a coefficient from the learned fallback and then updates it online.
 
-This is safer than crashing on a genuinely new event, but still transparent enough to catch unusual inputs during review.
+This is safer than crashing on a genuinely new event, but still transparent enough to catch unusual inputs during review. It also avoids pretending the model can know the exact effect of a category it has never seen. The correct production behavior is to make the best data-derived estimate, flag uncertainty, and learn from the next correction.
 
 ## Why Not Use Deep Learning?
 

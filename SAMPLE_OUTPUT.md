@@ -93,7 +93,7 @@ Docker test output:
 
 ```text
 .................                                                        [100%]
-17 passed in 0.12s
+17 passed in 0.15s
 ```
 
 Detailed local test output:
@@ -117,7 +117,7 @@ tests/test_forecaster.py::test_invalid_correction_hour_is_rejected PASSED [ 35%]
 tests/test_forecaster.py::test_negative_actual_covers_are_rejected PASSED [ 41%]
 tests/test_forecaster.py::test_negative_on_hand_stock_is_rejected PASSED [ 47%]
 tests/test_forecaster.py::test_weather_alias_is_normalized PASSED        [ 52%]
-tests/test_forecaster.py::test_unseen_event_forecasts_with_neutral_factor_and_warning PASSED [ 58%]
+tests/test_forecaster.py::test_unseen_event_forecasts_with_learned_fallback_and_warning PASSED [ 58%]
 tests/test_forecaster.py::test_unseen_event_correction_creates_learned_factor PASSED [ 64%]
 tests/test_forecaster.py::test_unknown_on_hand_ingredient_is_rejected PASSED [ 70%]
 tests/test_forecaster.py::test_empty_history_data_is_rejected PASSED     [ 76%]
@@ -126,7 +126,7 @@ tests/test_forecaster.py::test_corrupted_model_state_is_rejected PASSED  [ 88%]
 tests/test_forecaster.py::test_incomplete_model_state_is_rejected PASSED [ 94%]
 tests/test_forecaster.py::test_extreme_corrections_keep_coefficients_and_hourly_shape_bounded PASSED [100%]
 
-============================== 17 passed in 0.11s ==============================
+============================== 17 passed in 0.09s ==============================
 ```
 
 ## What The Tests Prove
@@ -138,7 +138,7 @@ tests/test_forecaster.py::test_extreme_corrections_keep_coefficients_and_hourly_
 - Model state can be saved and loaded.
 - Invalid manager feedback is rejected instead of corrupting the model.
 - Weather aliases are normalized.
-- Unseen event labels forecast with neutral factors and warnings.
+- Unseen event labels forecast with learned fallback factors and warnings.
 - Corrections for unseen labels create learned coefficients over time.
 - Unknown ingredient names in stock input are rejected.
 - Empty or malformed historical datasets are rejected with clear errors.

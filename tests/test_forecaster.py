@@ -167,13 +167,14 @@ def test_weather_alias_is_normalized(tmp_path):
     assert rainy["total_covers"] == rain["total_covers"]
 
 
-def test_unseen_event_forecasts_with_neutral_factor_and_warning(tmp_path):
+def test_unseen_event_forecasts_with_learned_fallback_and_warning(tmp_path):
     forecaster = build_forecaster(tmp_path)
     baseline = forecaster.forecast("2025-08-02", event="none")
     parade = forecaster.forecast("2025-08-02", event="parade")
+    fallback = forecaster.state["fallback_factors"]["event"]
 
     assert parade["context"]["normalized_event"] == "parade"
-    assert parade["warnings"] == ["unseen event 'parade' used neutral factor 1.0"]
+    assert parade["warnings"] == [f"unseen event 'parade' used learned fallback factor {fallback:.3f}"]
     assert parade["total_covers"] > 0
     assert parade["total_covers"] != baseline["total_covers"]
 
@@ -181,12 +182,13 @@ def test_unseen_event_forecasts_with_neutral_factor_and_warning(tmp_path):
 def test_unseen_event_correction_creates_learned_factor(tmp_path):
     forecaster = build_forecaster(tmp_path)
     assert "parade" not in forecaster.state["event_factors"]
+    fallback = forecaster.state["fallback_factors"]["event"]
 
     correction = forecaster.apply_correction("2025-08-02", {hour: 20 for hour in range(10, 24)}, event="parade")
 
     assert "parade" in forecaster.state["event_factors"]
-    assert correction["warnings"] == ["unseen event 'parade' initialized with neutral factor 1.0"]
-    assert forecaster.state["event_factors"]["parade"] != 1.0
+    assert correction["warnings"] == [f"unseen event 'parade' initialized with learned fallback factor {fallback:.3f}"]
+    assert forecaster.state["event_factors"]["parade"] != fallback
 
 
 def test_unknown_on_hand_ingredient_is_rejected(tmp_path):

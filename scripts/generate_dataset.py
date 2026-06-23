@@ -94,7 +94,7 @@ def generate_history() -> None:
     write_csv(DATA / "sales_history.csv", rows)
 
 
-def generate_static_tables() -> None:
+def generate_reference_tables() -> None:
     ingredients = [
         ("chicken_kg", 5, "kg", 3, 2, 2),
         ("beef_kg", 4, "kg", 4, 3, 2),
@@ -218,5 +218,5 @@ def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 
 
 if __name__ == "__main__":
-    generate_static_tables()
+    generate_reference_tables()
     generate_history()

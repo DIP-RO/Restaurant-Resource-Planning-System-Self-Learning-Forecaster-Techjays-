@@ -51,7 +51,6 @@ EVENT_ALIASES = {
     "game": "sports",
     "sports_game": "sports",
 }
-UNSEEN_FACTOR = 1.0
 
 
 @dataclass(frozen=True)
@@ -174,8 +173,8 @@ class RestaurantForecaster:
             "predicted_total": round(predicted_total, 1),
             "actual_total": round(actual_total, 1),
             "adjustment_ratio": round(ratio, 3),
-            "updated_weather_factor": round(self.state["weather_factors"].get(context.weather, UNSEEN_FACTOR), 3),
-            "updated_event_factor": round(self.state["event_factors"].get(context.event, UNSEEN_FACTOR), 3),
+            "updated_weather_factor": round(self._factor_for("weather", context.weather), 3),
+            "updated_event_factor": round(self._factor_for("event", context.event), 3),
             "warnings": warnings,
             "message": "Model coefficients updated from manager correction.",
         }
@@ -188,10 +187,10 @@ class RestaurantForecaster:
         state = self.state
         base = float(state["base_daily_covers"])
         factor = (
-            state["weekday_factors"].get(context.weekday, 1.0)
-            * state["weather_factors"].get(context.weather, 1.0)
-            * state["event_factors"].get(context.event, 1.0)
-            * (state["event_factors"].get("holiday", 1.0) if context.holiday else 1.0)
+            state["weekday_factors"][context.weekday]
+            * self._factor_for("weather", context.weather)
+            * self._factor_for("event", context.event)
+            * (self._factor_for("event", "holiday") if context.holiday else 1.0)
         )
         total = max(5.0, base * factor)
         return {
@@ -217,7 +216,7 @@ class RestaurantForecaster:
     def _load_or_train_state(self) -> dict[str, Any]:
         if self.model_path.exists():
             try:
-                return json.loads(self.model_path.read_text())
+                return self._migrate_state(json.loads(self.model_path.read_text()))
             except JSONDecodeError as exc:
                 raise ValueError(f"invalid model state JSON at {self.model_path}") from exc
         state = self._train_initial_state()
@@ -257,12 +256,21 @@ class RestaurantForecaster:
             event_totals.setdefault(row["event"], []).append(covers)
 
         base = mean(daily_totals.values())
+        weekday_factors = self._factors_from_totals(weekday_totals, base)
+        weather_factors = self._factors_from_totals(weather_totals, base)
+        event_factors = self._factors_from_totals(event_totals, base) | {"holiday": 1.18}
+        weather_counts = self._counts_from_totals(weather_totals)
+        event_counts = self._counts_from_totals(event_totals)
         return {
             "base_daily_covers": round(base, 3),
             "learning_rate": 0.18,
-            "weekday_factors": self._factors_from_totals(weekday_totals, base),
-            "weather_factors": self._factors_from_totals(weather_totals, base),
-            "event_factors": self._factors_from_totals(event_totals, base) | {"holiday": 1.18},
+            "weekday_factors": weekday_factors,
+            "weather_factors": weather_factors,
+            "event_factors": event_factors,
+            "fallback_factors": {
+                "weather": self._weighted_average_factor(weather_factors, weather_counts),
+                "event": self._event_fallback_factor(event_factors, event_counts),
+            },
             "hourly_shape": {
                 str(hour): round(hourly_totals[hour] / max(sum(hourly_totals.values()), 1.0), 5)
                 for hour in SERVICE_HOURS
@@ -320,6 +328,7 @@ class RestaurantForecaster:
             "hourly_shape",
             "menu_mix",
             "corrections",
+            "fallback_factors",
         }
         missing = required_keys - set(state)
         if missing:
@@ -327,6 +336,29 @@ class RestaurantForecaster:
         missing_hours = {str(hour) for hour in SERVICE_HOURS} - set(state["hourly_shape"])
         if missing_hours:
             raise ValueError(f"model state hourly_shape is missing hours: {', '.join(sorted(missing_hours))}")
+        if "weather" not in state["fallback_factors"] or "event" not in state["fallback_factors"]:
+            raise ValueError("model state fallback_factors must include weather and event")
+
+    @staticmethod
+    def _migrate_state(state: dict[str, Any]) -> dict[str, Any]:
+        if "fallback_factors" not in state and "weather_factors" in state and "event_factors" in state:
+            weather_factors = state["weather_factors"]
+            specific_event_factors = {
+                key: value
+                for key, value in state["event_factors"].items()
+                if key not in {"none", "holiday"}
+            }
+            baseline_event_factors = {
+                key: value
+                for key, value in state["event_factors"].items()
+                if key != "holiday"
+            }
+            event_fallback_source = specific_event_factors or baseline_event_factors or state["event_factors"]
+            state["fallback_factors"] = {
+                "weather": round(mean(float(value) for value in weather_factors.values()), 5),
+                "event": round(mean(float(value) for value in event_fallback_source.values()), 5),
+            }
+        return state
 
     def _prepare_context(
         self,
@@ -340,6 +372,7 @@ class RestaurantForecaster:
             "weather",
             weather,
             self.state["weather_factors"],
+            float(self.state["fallback_factors"]["weather"]),
             WEATHER_ALIASES,
             learn_unseen,
         )
@@ -347,6 +380,7 @@ class RestaurantForecaster:
             "event",
             event,
             self.state["event_factors"],
+            float(self.state["fallback_factors"]["event"]),
             EVENT_ALIASES,
             learn_unseen,
         )
@@ -358,6 +392,7 @@ class RestaurantForecaster:
         name: str,
         value: str,
         factors: dict[str, float],
+        fallback_factor: float,
         aliases: dict[str, str],
         learn_unseen: bool,
     ) -> tuple[str, str | None]:
@@ -366,9 +401,9 @@ class RestaurantForecaster:
         if normalized in factors:
             return normalized, None
         if learn_unseen:
-            factors[normalized] = UNSEEN_FACTOR
-            return normalized, f"unseen {name} '{value}' initialized with neutral factor {UNSEEN_FACTOR}"
-        return normalized, f"unseen {name} '{value}' used neutral factor {UNSEEN_FACTOR}"
+            factors[normalized] = fallback_factor
+            return normalized, f"unseen {name} '{value}' initialized with learned fallback factor {fallback_factor:.3f}"
+        return normalized, f"unseen {name} '{value}' used learned fallback factor {fallback_factor:.3f}"
 
     @staticmethod
     def _validate_actual_covers(actual_covers_by_hour: dict[int | str, float]) -> dict[int, float]:
@@ -422,9 +457,49 @@ class RestaurantForecaster:
             for key, values in sorted(groups.items())
         }
 
+    @staticmethod
+    def _counts_from_totals(groups: dict[str, list[float]]) -> dict[str, int]:
+        return {key: len(values) for key, values in groups.items()}
+
+    @staticmethod
+    def _weighted_average_factor(factors: dict[str, float], counts: dict[str, int]) -> float:
+        total_count = sum(counts.get(key, 0) for key in factors)
+        if total_count <= 0:
+            return round(mean(float(value) for value in factors.values()), 5)
+        weighted_total = sum(float(factors[key]) * counts.get(key, 0) for key in factors)
+        return round(weighted_total / total_count, 5)
+
+    @classmethod
+    def _event_fallback_factor(cls, factors: dict[str, float], counts: dict[str, int]) -> float:
+        event_factors = {
+            key: value
+            for key, value in factors.items()
+            if key not in {"none", "holiday"}
+        }
+        if not event_factors:
+            baseline_factors = {
+                key: value
+                for key, value in factors.items()
+                if key != "holiday"
+            }
+            return cls._weighted_average_factor(baseline_factors or factors, counts)
+        return cls._weighted_average_factor(event_factors, counts)
+
+    def _factor_for(self, group: str, key: str) -> float:
+        factor_group = self.state[f"{group}_factors"]
+        if key in factor_group:
+            return float(factor_group[key])
+        return float(self.state["fallback_factors"][group])
+
     def _nudge_factor(self, group: str, key: str, multiplier_delta: float) -> None:
         factors = self.state[group]
-        factors[key] = apply_bounded_multiplier(float(factors.get(key, 1.0)), multiplier_delta)
+        factor = factors.get(key)
+        if factor is None:
+            fallback_group = group.removesuffix("_factors")
+            factor = self.state["fallback_factors"].get(fallback_group)
+        if factor is None:
+            raise ValueError(f"cannot update missing factor '{key}' for {group}")
+        factors[key] = apply_bounded_multiplier(float(factor), multiplier_delta)
 
     def _normalize_hourly_shape(self) -> None:
         shape = self.state["hourly_shape"]
