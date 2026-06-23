@@ -16,6 +16,78 @@ The system produces three operational outputs for an upcoming day:
 
 It also accepts manager feedback, such as "we predicted 120 covers, but actual was 85 because of rain", and updates the model coefficients so future similar forecasts improve.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Data["CSV Data Layer"]
+        H["sales_history.csv"]
+        R["menu_recipes.csv"]
+        I["ingredients.csv"]
+        S["staff_rules.csv"]
+        C["manager_corrections.csv"]
+    end
+
+    subgraph Model["Forecasting Core"]
+        T["Training + Preprocessing"]
+        F["Self-Learning Forecaster"]
+        M["Persisted Model State JSON"]
+    end
+
+    subgraph Planning["Planning Engines"]
+        Covers["Hourly Covers"]
+        Staff["Staffing by Role"]
+        Inventory["Ingredient Order Plan"]
+    end
+
+    subgraph Interfaces["Reviewer Interfaces"]
+        CLI["main.py / CLI"]
+        Docker["Docker Image"]
+        Compose["Docker Compose"]
+        CI["GitHub Actions"]
+    end
+
+    H --> T
+    R --> T
+    I --> Inventory
+    S --> Staff
+    T --> F
+    M <--> F
+    F --> Covers
+    Covers --> Staff
+    Covers --> Inventory
+    R --> Inventory
+    C --> F
+    CLI --> F
+    Docker --> CLI
+    Compose --> Docker
+    CI --> Docker
+```
+
+## Forecast And Learning Flow
+
+```mermaid
+flowchart TD
+    A["Reviewer runs forecast command"] --> B["Parse date, weather, event, holiday, stock"]
+    B --> C["Normalize aliases"]
+    C --> D{"Known weather/event?"}
+    D -->|Yes| E["Use learned coefficient"]
+    D -->|No| F["Use learned fallback factor and emit warning"]
+    E --> G["Predict daily covers"]
+    F --> G
+    G --> H["Apply learned hourly demand shape"]
+    H --> I["Calculate staff by role and station"]
+    H --> J["Estimate dish demand from learned menu mix"]
+    J --> K["Expand recipes into ingredient demand"]
+    K --> L["Apply stock, shelf life, lead time, min order quantity"]
+    I --> M["Return operational plan"]
+    L --> M
+    M --> N["Manager submits actual covers after service"]
+    N --> O["Compare actual vs predicted"]
+    O --> P["Bounded online coefficient update"]
+    P --> Q["Persist model state for future forecasts"]
+```
+
 ## Why This Modeling Approach
 
 For this assignment, I used an explainable coefficient-based online learning forecaster.
@@ -121,75 +193,7 @@ The system can forecast upcoming days even when a weather or event label was not
 
 Invalid operational data is still rejected. Unknown ingredient names, negative stock, invalid service hours, corrupted model state, and malformed CSV schemas should fail loudly rather than silently produce bad plans.
 
-## Architecture
-
-```mermaid
-flowchart LR
-    subgraph Data["CSV Data Layer"]
-        H["sales_history.csv"]
-        R["menu_recipes.csv"]
-        I["ingredients.csv"]
-        S["staff_rules.csv"]
-        C["manager_corrections.csv"]
-    end
-
-    subgraph Model["Forecasting Core"]
-        T["Training + Preprocessing"]
-        F["Self-Learning Forecaster"]
-        M["Persisted Model State JSON"]
-    end
-
-    subgraph Planning["Planning Engines"]
-        Covers["Hourly Covers"]
-        Staff["Staffing by Role"]
-        Inventory["Ingredient Order Plan"]
-    end
-
-    subgraph Interfaces["Reviewer Interfaces"]
-        CLI["main.py / CLI"]
-        Docker["Docker Image"]
-        CI["GitHub Actions"]
-    end
-
-    H --> T
-    R --> T
-    I --> Inventory
-    S --> Staff
-    T --> F
-    M <--> F
-    F --> Covers
-    Covers --> Staff
-    Covers --> Inventory
-    R --> Inventory
-    C --> F
-    CLI --> F
-    Docker --> CLI
-    CI --> Docker
-```
-
-## Forecast And Learning Flow
-
-```mermaid
-flowchart TD
-    A["Reviewer runs forecast command"] --> B["Parse date, weather, event, holiday, stock"]
-    B --> C["Normalize aliases"]
-    C --> D{"Known weather/event?"}
-    D -->|Yes| E["Use learned coefficient"]
-    D -->|No| F["Use learned fallback factor and emit warning"]
-    E --> G["Predict daily covers"]
-    F --> G
-    G --> H["Apply learned hourly demand shape"]
-    H --> I["Calculate staff by role and station"]
-    H --> J["Estimate dish demand from learned menu mix"]
-    J --> K["Expand recipes into ingredient demand"]
-    K --> L["Apply stock, shelf life, lead time, min order quantity"]
-    I --> M["Return operational plan"]
-    L --> M
-    M --> N["Manager submits actual covers after service"]
-    N --> O["Compare actual vs predicted"]
-    O --> P["Bounded online coefficient update"]
-    P --> Q["Persist model state for future forecasts"]
-```
+## Code Organization
 
 ```text
 data/
