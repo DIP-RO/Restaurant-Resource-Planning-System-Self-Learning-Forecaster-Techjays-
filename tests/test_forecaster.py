@@ -167,6 +167,16 @@ def test_weather_alias_is_normalized(tmp_path):
     assert rainy["total_covers"] == rain["total_covers"]
 
 
+def test_seen_weather_and_event_forecast_has_no_warnings(tmp_path):
+    forecaster = build_forecaster(tmp_path)
+    result = forecaster.forecast("2025-08-02", weather="rain", event="concert")
+
+    assert result["warnings"] == []
+    assert result["context"]["normalized_weather"] == "rain"
+    assert result["context"]["normalized_event"] == "concert"
+    assert result["total_covers"] > 0
+
+
 def test_unseen_event_forecasts_with_learned_fallback_and_warning(tmp_path):
     forecaster = build_forecaster(tmp_path)
     baseline = forecaster.forecast("2025-08-02", event="none")
@@ -179,6 +189,23 @@ def test_unseen_event_forecasts_with_learned_fallback_and_warning(tmp_path):
     assert parade["total_covers"] != baseline["total_covers"]
 
 
+def test_unseen_weather_and_event_forecast_with_learned_fallbacks(tmp_path):
+    forecaster = build_forecaster(tmp_path)
+    result = forecaster.forecast("2025-08-02", weather="monsoon", event="parade")
+    weather_fallback = forecaster.state["fallback_factors"]["weather"]
+    event_fallback = forecaster.state["fallback_factors"]["event"]
+
+    assert result["context"]["normalized_weather"] == "monsoon"
+    assert result["context"]["normalized_event"] == "parade"
+    assert result["warnings"] == [
+        f"unseen weather 'monsoon' used learned fallback factor {weather_fallback:.3f}",
+        f"unseen event 'parade' used learned fallback factor {event_fallback:.3f}",
+    ]
+    assert set(result["covers_by_hour"]) == set(range(10, 24))
+    assert result["total_covers"] > 0
+    assert result["ingredient_order"]
+
+
 def test_unseen_event_correction_creates_learned_factor(tmp_path):
     forecaster = build_forecaster(tmp_path)
     assert "parade" not in forecaster.state["event_factors"]
@@ -189,6 +216,44 @@ def test_unseen_event_correction_creates_learned_factor(tmp_path):
     assert "parade" in forecaster.state["event_factors"]
     assert correction["warnings"] == [f"unseen event 'parade' initialized with learned fallback factor {fallback:.3f}"]
     assert forecaster.state["event_factors"]["parade"] != fallback
+
+
+def test_unseen_weather_correction_creates_learned_factor(tmp_path):
+    forecaster = build_forecaster(tmp_path)
+    assert "monsoon" not in forecaster.state["weather_factors"]
+    fallback = forecaster.state["fallback_factors"]["weather"]
+
+    correction = forecaster.apply_correction("2025-08-02", {hour: 4 for hour in range(10, 24)}, weather="monsoon")
+
+    assert "monsoon" in forecaster.state["weather_factors"]
+    assert correction["warnings"] == [f"unseen weather 'monsoon' initialized with learned fallback factor {fallback:.3f}"]
+    assert forecaster.state["weather_factors"]["monsoon"] != fallback
+
+
+def test_legacy_model_state_is_migrated_to_learned_fallbacks(tmp_path):
+    model_path = tmp_path / "legacy_model_state.json"
+    forecaster = RestaurantForecaster(
+        DATA / "sales_history.csv",
+        DATA / "menu_recipes.csv",
+        DATA / "ingredients.csv",
+        model_path,
+        DATA / "staff_rules.csv",
+    )
+    legacy_state = dict(forecaster.state)
+    legacy_state.pop("fallback_factors")
+    model_path.write_text(json.dumps(legacy_state))
+
+    migrated = RestaurantForecaster(
+        DATA / "sales_history.csv",
+        DATA / "menu_recipes.csv",
+        DATA / "ingredients.csv",
+        model_path,
+        DATA / "staff_rules.csv",
+    )
+
+    assert "fallback_factors" in migrated.state
+    assert migrated.state["fallback_factors"]["weather"] > 0
+    assert migrated.state["fallback_factors"]["event"] > 0
 
 
 def test_unknown_on_hand_ingredient_is_rejected(tmp_path):

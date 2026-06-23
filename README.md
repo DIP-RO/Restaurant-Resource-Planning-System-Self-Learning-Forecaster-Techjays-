@@ -114,7 +114,7 @@ The system can forecast upcoming days even when a weather or event label was not
 
 - Common aliases are normalized, for example `rainy` becomes `rain`.
 - Truly unseen weather or event labels use a learned fallback factor calculated from the training distribution, not a fixed static guess.
-- Weather fallback is the frequency-weighted average of observed weather factors.
+- Weather fallback is the median observed weather factor, which avoids a hard-coded neutral default while staying robust to extreme weather outliers.
 - Event fallback is the frequency-weighted average of observed real-event factors; if the dataset has no real events, the baseline event distribution is used.
 - Forecast responses include a `warnings` list when an unseen label is handled with the learned fallback.
 - If a manager later submits a correction for that unseen label, the system initializes a coefficient from the learned fallback and then updates it from feedback.
@@ -317,6 +317,35 @@ Run model evaluation inside Docker:
 docker run --rm --entrypoint python restaurant-forecaster scripts/evaluate_model.py
 ```
 
+### Docker Compose
+
+Docker Compose is included as a reviewer convenience layer. It is not required for the application, but it makes the common checks shorter and repeatable.
+
+Run a normal forecast with seen weather and event categories:
+
+```bash
+docker compose run --rm forecast
+```
+
+Run an unseen-category forecast that exercises learned fallback factors and warnings:
+
+```bash
+docker compose run --rm forecast-unseen
+```
+
+Apply manager feedback:
+
+```bash
+docker compose run --rm correct
+```
+
+Run tests and evaluation:
+
+```bash
+docker compose run --rm test
+docker compose run --rm evaluate
+```
+
 ### Makefile Shortcuts
 
 ```bash
@@ -327,6 +356,10 @@ make evaluate
 make docker-build
 make docker-test
 make docker-evaluate
+make compose-forecast
+make compose-unseen
+make compose-test
+make compose-evaluate
 ```
 
 ### Local Python
@@ -390,6 +423,8 @@ The test suite checks:
 
 - Forecast output contains covers, staffing, and ingredient orders.
 - Weather and event factors change forecasted demand.
+- Seen weather and event categories forecast without warnings.
+- Unseen weather and event categories use learned fallback factors with warnings.
 - High on-hand stock can eliminate ingredient orders.
 - Manager correction lowers the relevant coefficient when actual demand is lower.
 - Learned correction state persists and reloads.
@@ -399,6 +434,7 @@ The test suite checks:
 - Weather aliases are normalized.
 - Unseen weather and event labels forecast with learned fallback factors and warnings.
 - Corrections for unseen labels create learned coefficients over time.
+- Legacy model state files are migrated to include learned fallback factors.
 - Unknown ingredient names in stock input are rejected.
 - Empty or malformed historical datasets are rejected.
 - Corrupted or incomplete model state files are rejected.
@@ -431,5 +467,6 @@ The pipeline runs on pushes and pull requests to `main`:
 - Runs the Python test suite.
 - Runs the model evaluation script.
 - Builds the Docker image.
+- Validates the Docker Compose configuration.
 - Smoke-tests the Docker forecast command.
 - Runs tests and model evaluation inside Docker.

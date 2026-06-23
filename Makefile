@@ -1,4 +1,4 @@
-.PHONY: forecast correct test evaluate docker-build docker-forecast docker-test docker-evaluate clean
+.PHONY: forecast correct test evaluate docker-build docker-forecast docker-test docker-evaluate compose-forecast compose-unseen compose-correct compose-test compose-evaluate clean
 
 forecast:
 	PYTHONPATH=src python main.py forecast --date 2025-08-01 --weather rain --event concert
@@ -23,6 +23,21 @@ docker-test:
 
 docker-evaluate:
 	docker run --rm --entrypoint python restaurant-forecaster scripts/evaluate_model.py
+
+compose-forecast:
+	docker compose run --rm forecast
+
+compose-unseen:
+	docker compose run --rm forecast-unseen
+
+compose-correct:
+	docker compose run --rm correct
+
+compose-test:
+	docker compose run --rm test
+
+compose-evaluate:
+	docker compose run --rm evaluate
 
 clean:
 	rm -rf .pytest_cache .model_state.json src/restaurant_forecaster/__pycache__ tests/__pycache__

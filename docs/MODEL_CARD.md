@@ -71,7 +71,7 @@ The model supports unseen weather and event labels at inference time.
 
 - Known aliases are normalized before prediction.
 - Unknown labels use a learned fallback factor derived from the training distribution, not a static neutral value.
-- Weather fallback is calculated from the frequency-weighted average of observed weather factors.
+- Weather fallback is calculated from the median observed weather factor, which avoids a hard-coded neutral default while staying robust to extreme weather outliers.
 - Event fallback is calculated from observed real-event factors; if the restaurant history has no real events, the baseline event distribution is used.
 - The response includes warnings so managers know the category was unseen and can review the decision.
 - If a correction is submitted for that new label, the system creates a coefficient from the learned fallback and then updates it online.

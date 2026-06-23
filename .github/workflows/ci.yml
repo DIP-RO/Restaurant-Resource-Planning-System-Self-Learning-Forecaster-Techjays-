@@ -40,6 +40,9 @@ jobs:
       - name: Build Docker image
         run: docker build -t restaurant-forecaster .
 
+      - name: Validate Docker Compose config
+        run: docker compose config
+
       - name: Smoke test forecast command
         run: docker run --rm restaurant-forecaster forecast --date 2025-08-01 --weather rain --event concert
 

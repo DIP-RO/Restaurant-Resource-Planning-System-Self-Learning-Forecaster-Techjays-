@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from json import JSONDecodeError
 from pathlib import Path
-from statistics import mean
+from statistics import mean, median
 from typing import Any
 
 from .feedback import apply_bounded_multiplier, clamp
@@ -268,7 +268,7 @@ class RestaurantForecaster:
             "weather_factors": weather_factors,
             "event_factors": event_factors,
             "fallback_factors": {
-                "weather": self._weighted_average_factor(weather_factors, weather_counts),
+                "weather": self._median_factor(weather_factors),
                 "event": self._event_fallback_factor(event_factors, event_counts),
             },
             "hourly_shape": {
@@ -355,7 +355,7 @@ class RestaurantForecaster:
             }
             event_fallback_source = specific_event_factors or baseline_event_factors or state["event_factors"]
             state["fallback_factors"] = {
-                "weather": round(mean(float(value) for value in weather_factors.values()), 5),
+                "weather": RestaurantForecaster._median_factor(weather_factors),
                 "event": round(mean(float(value) for value in event_fallback_source.values()), 5),
             }
         return state
@@ -468,6 +468,10 @@ class RestaurantForecaster:
             return round(mean(float(value) for value in factors.values()), 5)
         weighted_total = sum(float(factors[key]) * counts.get(key, 0) for key in factors)
         return round(weighted_total / total_count, 5)
+
+    @staticmethod
+    def _median_factor(factors: dict[str, float]) -> float:
+        return round(median(float(value) for value in factors.values()), 5)
 
     @classmethod
     def _event_fallback_factor(cls, factors: dict[str, float], counts: dict[str, int]) -> float:

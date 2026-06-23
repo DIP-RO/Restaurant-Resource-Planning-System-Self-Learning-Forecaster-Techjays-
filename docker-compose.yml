@@ -1,0 +1,58 @@
+services:
+  forecast:
+    build: .
+    image: restaurant-forecaster:latest
+    command:
+      - forecast
+      - --date
+      - "2025-08-01"
+      - --weather
+      - rain
+      - --event
+      - concert
+
+  forecast-unseen:
+    build: .
+    image: restaurant-forecaster:latest
+    command:
+      - forecast
+      - --date
+      - "2025-08-02"
+      - --weather
+      - monsoon
+      - --event
+      - parade
+
+  correct:
+    build: .
+    image: restaurant-forecaster:latest
+    command:
+      - correct
+      - --date
+      - "2025-08-01"
+      - --weather
+      - rain
+      - --event
+      - concert
+      - --actual
+      - '{"10":2,"11":5,"12":12,"13":10,"14":6,"15":4,"16":5,"17":8,"18":13,"19":15,"20":12,"21":7,"22":3,"23":1}'
+      - --reason
+      - Heavy rain reduced walk-ins
+
+  test:
+    build: .
+    image: restaurant-forecaster:latest
+    entrypoint:
+      - python
+    command:
+      - -m
+      - pytest
+      - -q
+
+  evaluate:
+    build: .
+    image: restaurant-forecaster:latest
+    entrypoint:
+      - python
+    command:
+      - scripts/evaluate_model.py
